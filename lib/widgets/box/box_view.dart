@@ -2,6 +2,7 @@
 import 'dart:ui';
 import 'package:fml/helper/common_helpers.dart';
 import 'package:flutter/material.dart';
+import 'package:fml/observable/binding.dart';
 import 'package:fml/widgets/scroller/scroller_model.dart';
 import 'package:fml/widgets/widget/iViewableWidget.dart';
 import 'package:fml/widgets/widget/widget_model.dart' ;
@@ -78,6 +79,7 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
   bool isGradient = false;
   late AnimationController _controller;
   late final Animation<double> _animation;
+  bool hasCompletedInvisibleAnimation = false;
 
   
   @override
@@ -87,13 +89,27 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
 
     // If the model contains any databrokers we fire them before building so we can bind to the data
     widget.model.initialize();
-    _controller = AnimationController(vsync: this,  duration: Duration(milliseconds: 1200));
+    _controller = AnimationController(vsync: this,  duration: Duration(milliseconds: 200));
     _animation = CurvedAnimation(
         parent: _controller,
         curve: Curves.easeIn,);
 
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && !widget.model.visible)
+      {
+          hasCompletedInvisibleAnimation = true;
+          setState(() {});
+        } else if (status == AnimationStatus.completed && widget.model.visible){
+          hasCompletedInvisibleAnimation = false;
+      }
+
+    });
+
     if (widget.model.visible) _controller.value = 1;
-    else _controller.value = 0;
+    else {
+      _controller.value = 0;
+      hasCompletedInvisibleAnimation = true;
+    }
   }
 
   @override
@@ -114,6 +130,7 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
 
   @override
   void dispose() {
+    _controller.dispose();
     widget.model.removeListener(this);
     super.dispose();
   }
@@ -122,8 +139,18 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
   onModelChange(WidgetModel model, {String? property, dynamic value}) {
     if (this.mounted) setState(() {});
 
-    if (widget.model.visible) _controller.value = 0;
-    else _controller.value = 1;
+    var b = Binding.fromString(property);
+    if (this.mounted && b?.property == 'visible') {
+      if (widget.model.visible) {
+        _controller.value = 0;
+        _controller.forward();
+      }
+      else {
+        _controller.value = 1;
+        _controller.reverse();
+      }
+    }
+
   }
 
   @override
@@ -137,7 +164,9 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
     //String? _id = widget.model.id;
 
     // Check if widget is visible before wasting resources on building it
-
+   if (!widget.model.visible &&  hasCompletedInvisibleAnimation) {
+    return Offstage();
+  }
 
     // Set Build Constraints in the [WidgetModel]
     widget.model.minWidth  = constraints.minWidth;
@@ -499,9 +528,6 @@ class _BoxViewState extends State<BoxView> with TickerProviderStateMixin impleme
                 minWidth: constr.minWidth!,
                 maxWidth: constr.maxWidth!));
       }
-
-    if (widget.model.visible)_controller.forward();
-    else _controller.reverse();
 
       return SizeTransition(sizeFactor: _animation,
     axis: Axis.horizontal,

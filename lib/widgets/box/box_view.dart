@@ -74,8 +74,10 @@ List<Color> getGradientColors(c1, c2, c3, c4) {
   return gradientColors;
 }
 
-class _BoxViewState extends State<BoxView> implements IModelListener {
+class _BoxViewState extends State<BoxView> with TickerProviderStateMixin implements IModelListener{
   bool isGradient = false;
+  late AnimationController _controller;
+  late final Animation<double> _animation;
 
   
   @override
@@ -85,7 +87,13 @@ class _BoxViewState extends State<BoxView> implements IModelListener {
 
     // If the model contains any databrokers we fire them before building so we can bind to the data
     widget.model.initialize();
+    _controller = AnimationController(vsync: this,  duration: Duration(milliseconds: 1200));
+    _animation = CurvedAnimation(
+        parent: _controller,
+        curve: Curves.easeIn,);
 
+    if (widget.model.visible) _controller.value = 1;
+    else _controller.value = 0;
   }
 
   @override
@@ -113,6 +121,9 @@ class _BoxViewState extends State<BoxView> implements IModelListener {
   /// Callback to fire the [_BoxViewState.build] when the [BoxModel] changes
   onModelChange(WidgetModel model, {String? property, dynamic value}) {
     if (this.mounted) setState(() {});
+
+    if (widget.model.visible) _controller.value = 0;
+    else _controller.value = 1;
   }
 
   @override
@@ -126,7 +137,7 @@ class _BoxViewState extends State<BoxView> implements IModelListener {
     //String? _id = widget.model.id;
 
     // Check if widget is visible before wasting resources on building it
-    if (widget.model.visible == false) return Offstage();
+
 
     // Set Build Constraints in the [WidgetModel]
     widget.model.minWidth  = constraints.minWidth;
@@ -489,7 +500,17 @@ class _BoxViewState extends State<BoxView> implements IModelListener {
                 maxWidth: constr.maxWidth!));
       }
 
-      return view;
+    if (widget.model.visible)_controller.forward();
+    else _controller.reverse();
+
+      return SizeTransition(sizeFactor: _animation,
+    axis: Axis.horizontal,
+    child: SizeTransition(
+          sizeFactor: _animation,
+          axis: Axis.vertical,
+          child: FadeTransition(
+          opacity: _animation,
+          child: view),),);
     }
 
 }

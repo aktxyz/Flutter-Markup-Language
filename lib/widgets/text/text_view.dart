@@ -1,4 +1,5 @@
 // © COPYRIGHT 2022 APPDADDY SOFTWARE SOLUTIONS INC. ALL RIGHTS RESERVED.
+import 'package:fml/observable/binding.dart';
 import 'package:fml/widgets/expanded/expanded_model.dart';
 import 'package:fml/widgets/scroller/scroller_model.dart';
 import 'package:fml/widgets/widget/widget_model.dart' ;
@@ -15,8 +16,11 @@ class TextView extends StatefulWidget
   _TextViewState createState() => _TextViewState();
 }
 
-class _TextViewState extends State<TextView> implements IModelListener {
+class _TextViewState extends State<TextView> with TickerProviderStateMixin implements IModelListener {
 
+  late AnimationController _controller;
+  late final Animation<double> _animation;
+  bool hasCompletedInvisibleAnimation = false;
   bool gfloaded = false;
 
   @override
@@ -38,6 +42,28 @@ class _TextViewState extends State<TextView> implements IModelListener {
 
     // If the model contains any databrokers we fire them before building so we can bind to the data
     widget.model.initialize();
+
+    _controller = AnimationController(vsync: this,  duration: Duration(milliseconds: 200));
+    _animation = CurvedAnimation(
+      parent: _controller,
+      curve: Curves.easeIn,);
+
+    _controller.addStatusListener((status) {
+      if (status == AnimationStatus.dismissed && !widget.model.visible)
+      {
+        hasCompletedInvisibleAnimation = true;
+        setState(() {});
+      } else if (status == AnimationStatus.completed && widget.model.visible){
+        hasCompletedInvisibleAnimation = false;
+      }
+
+    });
+
+    if (widget.model.visible) _controller.value = 1;
+    else {
+      _controller.value = 0;
+      hasCompletedInvisibleAnimation = true;
+    }
   }
 
   @override
@@ -55,6 +81,7 @@ class _TextViewState extends State<TextView> implements IModelListener {
   @override
   void dispose()
   {
+    _controller.dispose();
     widget.model.removeListener(this);
     super.dispose();
   }
@@ -62,13 +89,28 @@ class _TextViewState extends State<TextView> implements IModelListener {
   /// Callback to fire the [_TextViewState.build] when the [TextModel] changes
   onModelChange(WidgetModel model, {String? property, dynamic value}) {
     if (this.mounted) setState(() {});
+
+    var b = Binding.fromString(property);
+    if (this.mounted && b?.property == 'visible') {
+      if (widget.model.visible) {
+        _controller.value = 0;
+        _controller.forward();
+      }
+      else {
+        _controller.value = 1;
+        _controller.reverse();
+      }
+    }
   }
 
   @override
   Widget build(BuildContext context)
   {
-    // Check if widget is visible before wasting resources on building it
-    if (!widget.model.visible || !gfloaded) return Offstage();
+    // Check if widget is visible before wasting resources on building oot
+
+    if (!widget.model.visible && hasCompletedInvisibleAnimation || !gfloaded) {
+      return Offstage();
+    }
 
     String? label = widget.model.value;
     String? style = widget.model.style;
@@ -488,9 +530,8 @@ class _TextViewState extends State<TextView> implements IModelListener {
             );
           }
 
-
-
-
-    return view;
+    return FadeTransition(
+        opacity: _animation,
+        child: view);
   }
   }

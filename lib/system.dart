@@ -98,7 +98,7 @@ class System extends WidgetModel implements IEventManager {
   // janitorial service
   final Janitor janitor = Janitor();
 
-  // current domain
+  // current connection status
   BooleanObservable? _connected;
   bool get connected => _connected?.get() ?? false;
 
